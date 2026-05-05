@@ -69,7 +69,7 @@ class EffectEngine:
         out_w: int,
         out_h: int,
     ) -> List[str]:
-        return [f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2"]
+        return [f"scale={out_w}:{out_h}:force_original_aspect_ratio=increase,crop={out_w}:{out_h}"]
 
     @classmethod
     def _build_zoom_filter(cls, decision: EditDecision) -> List[str]:

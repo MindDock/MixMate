@@ -26,6 +26,16 @@ class FFmpegWrapper:
         except Exception:
             return False
 
+    def check_drawtext_available(self) -> bool:
+        try:
+            result = subprocess.run(
+                [self.ffmpeg_path, "-filters"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return "drawtext" in result.stdout
+        except Exception:
+            return False
+
     def render_plan(
         self,
         plan: EditPlan,
@@ -36,6 +46,10 @@ class FFmpegWrapper:
     ) -> RenderResult:
         print(f"\n🎞️ 开始渲染: {plan.name}")
         print(f"  输出: {output_path}")
+
+        self._drawtext_available = self.check_drawtext_available()
+        if not self._drawtext_available:
+            print("  ⚠️ FFmpeg 不支持 drawtext 滤镜，跳过字幕叠加")
 
         if len(plan.decisions) == 1:
             cmd = self._build_single_clip_command(plan, output_path, overwrite)
@@ -91,7 +105,7 @@ class FFmpegWrapper:
             letterbox=False,
         )
 
-        if decision.subtitle_text:
+        if decision.subtitle_text and getattr(self, '_drawtext_available', True):
             style_name = self._get_subtitle_style(plan.style)
             sub_filter = SubtitleEngine.build_drawtext_filter(
                 decision.subtitle_text, style_name,
@@ -197,7 +211,7 @@ class FFmpegWrapper:
 
         vfilters = EffectEngine.build_filter_chain(decision, out_w, out_h)
 
-        if decision.subtitle_text:
+        if decision.subtitle_text and getattr(self, '_drawtext_available', True):
             sub_style = self._get_subtitle_style(style_name)
             sub_filter = SubtitleEngine.build_drawtext_filter(
                 decision.subtitle_text, sub_style,

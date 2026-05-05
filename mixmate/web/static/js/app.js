@@ -43,9 +43,11 @@ const MixMate = (() => {
     }
 
     async function restoreState() {
+        console.log('[MixMate] restoreState START');
         try {
             const activeResp = await fetch('/api/active-task');
             const activeData = await activeResp.json();
+            console.log('[MixMate] restoreState active-task:', activeData);
             if (activeData.has_active) {
                 state.analyzing = true;
                 state.currentTaskId = activeData.task_id;
@@ -69,6 +71,7 @@ const MixMate = (() => {
                     resetAnalyzeState();
                     goToStep(1);
                 }
+                console.log('[MixMate] restoreState: active task handled, returning');
                 return;
             }
         } catch (e) {
@@ -78,29 +81,37 @@ const MixMate = (() => {
         try {
             const lastResp = await fetch('/api/last-analysis');
             const lastData = await lastResp.json();
+            console.log('[MixMate] restoreState last-analysis:', lastData.has_analysis);
             if (lastData.has_analysis) {
                 state.analysisData = lastData.analysis;
                 loadExistingFiles();
                 goToStep(2);
                 renderTimeline(lastData.analysis);
+                console.log('[MixMate] restoreState: last analysis restored, returning');
                 return;
             }
         } catch (e) {
             console.error('[MixMate] restoreState last-analysis check failed:', e);
         }
 
+        console.log('[MixMate] restoreState: no active task or last analysis, loading files');
         loadExistingFiles();
     }
 
     async function loadExistingFiles() {
+        console.log('[MixMate] loadExistingFiles called, analyzing:', state.analyzing);
         try {
             const resp = await fetch('/api/uploaded-files');
             const data = await resp.json();
+            console.log('[MixMate] loadExistingFiles response, files:', data.files?.length);
             if (data.files && data.files.length > 0) {
                 state.uploadedFiles = data.files;
                 renderFileList();
                 if (!state.analyzing) {
+                    console.log('[MixMate] loadExistingFiles: enabling btnAnalyze');
                     $('#btnAnalyze').disabled = false;
+                } else {
+                    console.log('[MixMate] loadExistingFiles: SKIPPING btnAnalyze enable (analyzing=true)');
                 }
             }
         } catch (e) {
@@ -118,22 +129,45 @@ const MixMate = (() => {
     }
 
     function goToStep(step) {
+        console.log('[MixMate] goToStep(' + step + ') called, previous step:', state.currentStep);
+        console.trace('[MixMate] goToStep call stack');
         state.currentStep = step;
+
         $$('.step').forEach(s => {
             const sNum = parseInt(s.dataset.step);
             s.classList.remove('active', 'completed');
             if (sNum === step) s.classList.add('active');
             else if (sNum < step) s.classList.add('completed');
         });
-        $$('.panel').forEach(p => p.classList.add('hidden'));
+
         const panelMap = { 1: 'panelUpload', 2: 'panelTimeline', 3: 'panelStyle', 4: 'panelResult' };
-        const panel = $(`#${panelMap[step]}`);
+
+        $$('.panel').forEach(p => {
+            console.log('[MixMate] hiding panel:', p.id, 'classList before:', p.classList.contains('hidden'));
+            p.classList.add('hidden');
+            p.style.display = 'none';
+        });
+
+        const targetId = panelMap[step];
+        const panel = $(`#${targetId}`);
         if (panel) {
             panel.classList.remove('hidden');
+            panel.style.display = '';
             panel.style.animation = 'none';
             panel.offsetHeight;
             panel.style.animation = '';
+            console.log('[MixMate] showing panel:', targetId, 'hidden class:', panel.classList.contains('hidden'), 'display:', panel.style.display);
+        } else {
+            console.error('[MixMate] PANEL NOT FOUND:', targetId);
         }
+
+        setTimeout(() => {
+            const p1 = $('#panelUpload');
+            const p2 = $('#panelTimeline');
+            console.log('[MixMate] AFTER goToStep(' + step + ') check:');
+            console.log('  panelUpload: hidden=' + p1.classList.contains('hidden') + ' display=' + getComputedStyle(p1).display);
+            console.log('  panelTimeline: hidden=' + p2.classList.contains('hidden') + ' display=' + getComputedStyle(p2).display);
+        }, 50);
     }
 
     function bindUpload() {
@@ -203,6 +237,8 @@ const MixMate = (() => {
     }
 
     async function startAnalysis() {
+        console.log('[MixMate] startAnalysis called, files:', state.uploadedFiles.length, 'analyzing:', state.analyzing, 'currentStep:', state.currentStep);
+
         if (state.uploadedFiles.length === 0) {
             toast('请先上传视频文件', 'error');
             return;
@@ -217,22 +253,31 @@ const MixMate = (() => {
         const btn = $('#btnAnalyze');
         btn.disabled = true;
         btn.innerHTML = '<span class="btn-icon-left">⏳</span> 分析中...';
+        console.log('[MixMate] button disabled, about to call goToStep(2)');
 
         goToStep(2);
+
+        console.log('[MixMate] goToStep(2) returned, currentStep:', state.currentStep);
+        console.log('[MixMate] panelUpload display:', getComputedStyle($('#panelUpload')).display);
+        console.log('[MixMate] panelTimeline display:', getComputedStyle($('#panelTimeline')).display);
 
         const container = $('#timelineContainer');
         const stats = $('#timelineStats');
         stats.innerHTML = '';
         container.innerHTML = renderAnalysisProgress(state.uploadedFiles);
+        console.log('[MixMate] progress panel rendered into timelineContainer');
 
         const paths = state.uploadedFiles.map(f => f.path);
         try {
+            console.log('[MixMate] sending /api/analyze request, paths:', paths);
             const resp = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ videos: paths }),
             });
             const data = await resp.json();
+            console.log('[MixMate] /api/analyze response:', data);
+
             if (data.error) {
                 toast(data.error, 'error');
                 resetAnalyzeState();
@@ -243,12 +288,17 @@ const MixMate = (() => {
             if (data.task_id) {
                 state.currentTaskId = data.task_id;
                 updateAnalysisProgress({ message: '分析任务已启动，正在处理中...', progress: 5 });
+                console.log('[MixMate] task_id:', data.task_id, 'starting poll...');
                 const analysisData = await pollTask(data.task_id);
+                console.log('[MixMate] pollTask returned:', !!analysisData);
                 if (analysisData && analysisData.analysis) {
                     state.analysisData = analysisData.analysis;
+                    console.log('[MixMate] calling renderTimeline, sources:', analysisData.analysis.sources?.length);
                     renderTimeline(analysisData.analysis);
                     toast('Timeline 识别完成！', 'success');
+                    console.log('[MixMate] renderTimeline done, currentStep:', state.currentStep);
                 } else {
+                    console.error('[MixMate] pollTask returned no analysis data');
                     resetAnalyzeState();
                     goToStep(1);
                 }
@@ -262,6 +312,7 @@ const MixMate = (() => {
                 goToStep(1);
             }
         } catch (e) {
+            console.error('[MixMate] startAnalysis error:', e);
             toast('分析失败: ' + e.message, 'error');
             resetAnalyzeState();
             goToStep(1);
@@ -278,20 +329,31 @@ const MixMate = (() => {
 
     async function pollTask(taskId) {
         const maxAttempts = 600;
+        console.log('[MixMate] pollTask START, taskId:', taskId);
         for (let i = 0; i < maxAttempts; i++) {
             await new Promise(r => setTimeout(r, 2000));
             try {
                 const resp = await fetch(`/api/task/${taskId}`);
-                if (!resp.ok) continue;
+                console.log('[MixMate] pollTask fetch status:', resp.status, 'ok:', resp.ok);
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    console.error('[MixMate] pollTask non-ok response:', resp.status, errText);
+                    continue;
+                }
                 const data = await resp.json();
+                console.log('[MixMate] pollTask data:', JSON.stringify({ status: data.status, progress: data.progress, message: data.message, has_analysis: !!data.analysis }));
                 updateAnalysisProgress(data);
                 if (data.status === 'done') {
+                    console.log('[MixMate] pollTask DONE, has analysis:', !!data.analysis);
                     return data;
                 } else if (data.status === 'error') {
+                    console.error('[MixMate] pollTask ERROR from server:', data.message);
                     toast(data.message || '分析失败', 'error');
                     return null;
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('[MixMate] pollTask fetch exception:', e);
+            }
         }
         toast('分析超时', 'error');
         return null;
@@ -746,13 +808,13 @@ const MixMate = (() => {
             if (data.error) { toast(data.error, 'error'); return; }
 
             state.currentTaskId = data.task_id;
-            pollTask();
+            pollRenderTask();
         } catch (e) {
             toast('提交失败: ' + e.message, 'error');
         }
     }
 
-    function pollTask() {
+    function pollRenderTask() {
         if (state.pollTimer) clearInterval(state.pollTimer);
         state.pollTimer = setInterval(async () => {
             if (!state.currentTaskId) return;
@@ -784,23 +846,75 @@ const MixMate = (() => {
 
     function renderResults(results) {
         const list = $('#resultList');
-        list.innerHTML = results.map(r => {
+        list.innerHTML = results.map((r, idx) => {
             const sizeMB = (r.file_size / 1024 / 1024).toFixed(1);
+            const videoUrl = `/api/download/${state.currentTaskId}/${r.filename}`;
             return `
                 <div class="result-card">
-                    <div class="result-card-header">
-                        <div class="result-name">${esc(r.name)}</div>
-                        <span class="result-style-badge">${esc(r.style)}</span>
+                    <div class="result-preview" id="resultPreview${idx}">
+                        <video id="resultVideo${idx}" src="${videoUrl}" preload="metadata" playsinline></video>
+                        <div class="result-preview-overlay" id="resultOverlay${idx}" onclick="MixMate.togglePreview(${idx})">
+                            <div class="play-btn">▶</div>
+                        </div>
+                        <div class="result-preview-bar">
+                            <span class="result-preview-name">${esc(r.name)}</span>
+                            <span class="result-preview-time" id="resultTime${idx}">0:00</span>
+                        </div>
                     </div>
-                    <div class="result-meta">
-                        <div class="result-meta-item">时长 <span>${r.duration}s</span></div>
-                        <div class="result-meta-item">大小 <span>${sizeMB}MB</span></div>
+                    <div class="result-card-body">
+                        <div class="result-meta">
+                            <div class="result-meta-item">时长 <span>${r.duration.toFixed(1)}s</span></div>
+                            <div class="result-meta-item">大小 <span>${sizeMB}MB</span></div>
+                            <span class="result-style-badge">${esc(r.style)}</span>
+                        </div>
+                        <div class="result-actions">
+                            <button class="btn btn-primary btn-sm" onclick="MixMate.togglePreview(${idx})">
+                                <span class="btn-icon-left">▶</span> 播放
+                            </button>
+                            <button class="btn btn-ghost btn-sm" onclick="window.open('${videoUrl}')">
+                                <span class="btn-icon-left">⬇</span> 下载
+                            </button>
+                        </div>
                     </div>
-                    <button class="btn-download" onclick="window.open('/api/download/${state.currentTaskId}/${r.filename}')">
-                        ⬇ 下载视频
-                    </button>
                 </div>`;
         }).join('');
+
+        results.forEach((_, idx) => {
+            const video = $(`#resultVideo${idx}`);
+            const overlay = $(`#resultOverlay${idx}`);
+            const timeEl = $(`#resultTime${idx}`);
+            if (!video) return;
+            video.addEventListener('timeupdate', () => {
+                const m = Math.floor(video.currentTime / 60);
+                const s = Math.floor(video.currentTime % 60);
+                timeEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+            });
+            video.addEventListener('pause', () => {
+                overlay.classList.remove('playing');
+            });
+            video.addEventListener('play', () => {
+                overlay.classList.add('playing');
+            });
+            video.addEventListener('ended', () => {
+                overlay.classList.remove('playing');
+            });
+        });
+    }
+
+    function togglePreview(idx) {
+        const video = $(`#resultVideo${idx}`);
+        const overlay = $(`#resultOverlay${idx}`);
+        if (!video) return;
+        if (video.paused) {
+            document.querySelectorAll('.result-preview video').forEach(v => {
+                if (v !== video) { v.pause(); }
+            });
+            video.play();
+            overlay.classList.add('playing');
+        } else {
+            video.pause();
+            overlay.classList.remove('playing');
+        }
     }
 
     async function checkFFmpeg() {
@@ -970,5 +1084,5 @@ const MixMate = (() => {
 
     document.addEventListener('DOMContentLoaded', init);
 
-    return { state, toast, goToStep };
+    return { state, toast, goToStep, togglePreview };
 })();

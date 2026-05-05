@@ -1397,15 +1397,92 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    overflow: hidden;
     animation: fadeIn 0.4s ease;
 }
 
-.result-card-header {
+.result-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9/16;
+    max-height: 420px;
+    background: #000;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.result-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.result-preview-overlay {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.35);
+    transition: var(--transition);
+}
+
+.result-preview-overlay:hover {
+    background: rgba(0,0,0,0.2);
+}
+
+.result-preview-overlay.playing {
+    background: transparent;
+    pointer-events: none;
+}
+
+.play-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    transition: var(--transition);
+}
+
+.result-preview-overlay:hover .play-btn {
+    background: rgba(255,255,255,0.35);
+    transform: scale(1.1);
+}
+
+.result-preview-overlay.playing .play-btn {
+    display: none;
+}
+
+.result-preview-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 14px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    display: flex;
     justify-content: space-between;
-    margin-bottom: 12px;
+    align-items: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+}
+
+.result-preview-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.result-card-body {
+    padding: 16px 20px 20px;
 }
 
 .result-name {
@@ -1425,7 +1502,8 @@ body {
 .result-meta {
     display: flex;
     gap: 16px;
-    margin-bottom: 16px;
+    align-items: center;
+    margin-bottom: 14px;
 }
 
 .result-meta-item {
@@ -1438,28 +1516,15 @@ body {
     font-weight: 600;
 }
 
-.btn-download {
-    width: 100%;
-    padding: 10px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    color: var(--accent-light);
-    font-family: var(--font);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
+.result-actions {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
+    gap: 10px;
 }
 
-.btn-download:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+.btn-sm {
+    padding: 7px 14px;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
 }
 
 /* ===== Toast ===== */
