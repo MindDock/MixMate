@@ -10,14 +10,28 @@ echo ""
 echo "🎬 MixMate - AI自动视频剪辑系统"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-if ! command -v python3 &>/dev/null; then
-    echo "❌ 未找到 python3，请先安装 Python 3.9+"
-    exit 1
+PYTHON=""
+if [ -f ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+elif [ -f "venv/bin/python" ]; then
+    PYTHON="venv/bin/python"
+elif [ -f "/opt/miniconda3/bin/python" ]; then
+    PYTHON="/opt/miniconda3/bin/python"
+elif [ -f "$HOME/miniconda3/bin/python" ]; then
+    PYTHON="$HOME/miniconda3/bin/python"
+elif [ -f "$HOME/anaconda3/bin/python" ]; then
+    PYTHON="$HOME/anaconda3/bin/python"
 fi
 
-if ! python3 -c "import flask" 2>/dev/null; then
+if [ -z "$PYTHON" ]; then
+    PYTHON="python3"
+fi
+
+echo "🐍 Python: $($PYTHON --version 2>&1)"
+
+if ! $PYTHON -c "import flask" 2>/dev/null; then
     echo "📦 安装依赖..."
-    pip3 install -r requirements.txt
+    $PYTHON -m pip install -r requirements.txt
 fi
 
 if ! command -v ffmpeg &>/dev/null; then
@@ -38,4 +52,4 @@ echo "🚀 启动 Web UI → http://localhost:$PORT"
 echo "   按 Ctrl+C 停止"
 echo ""
 
-python3 -c "from mixmate.web.app import run_server; run_server(port=$PORT)"
+$PYTHON -c "from mixmate.web.app import run_server; run_server(port=$PORT)"
