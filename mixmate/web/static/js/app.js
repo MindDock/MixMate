@@ -99,7 +99,9 @@ const MixMate = (() => {
             if (data.files && data.files.length > 0) {
                 state.uploadedFiles = data.files;
                 renderFileList();
-                $('#btnAnalyze').disabled = false;
+                if (!state.analyzing) {
+                    $('#btnAnalyze').disabled = false;
+                }
             }
         } catch (e) {
             console.error('[MixMate] loadExistingFiles failed:', e);
@@ -201,8 +203,6 @@ const MixMate = (() => {
     }
 
     async function startAnalysis() {
-        console.log('[MixMate] startAnalysis called, files:', state.uploadedFiles.length, 'analyzing:', state.analyzing);
-
         if (state.uploadedFiles.length === 0) {
             toast('请先上传视频文件', 'error');
             return;
@@ -218,9 +218,8 @@ const MixMate = (() => {
         btn.disabled = true;
         btn.innerHTML = '<span class="btn-icon-left">⏳</span> 分析中...';
 
-        console.log('[MixMate] goToStep(2) called');
         goToStep(2);
-        console.log('[MixMate] panelUpload hidden?', $('#panelUpload').classList.contains('hidden'), 'panelTimeline hidden?', $('#panelTimeline').classList.contains('hidden'));
+
         const container = $('#timelineContainer');
         const stats = $('#timelineStats');
         stats.innerHTML = '';
@@ -244,17 +243,12 @@ const MixMate = (() => {
             if (data.task_id) {
                 state.currentTaskId = data.task_id;
                 updateAnalysisProgress({ message: '分析任务已启动，正在处理中...', progress: 5 });
-                console.log('[MixMate] task_id:', data.task_id, 'starting poll...');
                 const analysisData = await pollTask(data.task_id);
-                console.log('[MixMate] pollTask returned:', !!analysisData, analysisData ? ('has_analysis=' + !!analysisData.analysis) : 'null');
                 if (analysisData && analysisData.analysis) {
                     state.analysisData = analysisData.analysis;
-                    console.log('[MixMate] calling renderTimeline, sources:', analysisData.analysis.sources?.length);
                     renderTimeline(analysisData.analysis);
                     toast('Timeline 识别完成！', 'success');
-                    console.log('[MixMate] renderTimeline done, current step:', state.currentStep);
                 } else {
-                    console.error('[MixMate] pollTask returned no analysis data');
                     resetAnalyzeState();
                     goToStep(1);
                 }
@@ -288,22 +282,16 @@ const MixMate = (() => {
             await new Promise(r => setTimeout(r, 2000));
             try {
                 const resp = await fetch(`/api/task/${taskId}`);
-                if (!resp.ok) {
-                    console.error('[MixMate] pollTask HTTP error:', resp.status);
-                    continue;
-                }
+                if (!resp.ok) continue;
                 const data = await resp.json();
                 updateAnalysisProgress(data);
                 if (data.status === 'done') {
-                    console.log('[MixMate] pollTask done, has_analysis:', !!data.analysis);
                     return data;
                 } else if (data.status === 'error') {
                     toast(data.message || '分析失败', 'error');
                     return null;
                 }
-            } catch (e) {
-                console.error('[MixMate] pollTask fetch error:', e);
-            }
+            } catch (e) {}
         }
         toast('分析超时', 'error');
         return null;

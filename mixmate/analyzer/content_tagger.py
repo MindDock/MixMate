@@ -234,22 +234,27 @@ class ContentTagger:
     def _compute_quality_score(self, segment: ShotSegment) -> float:
         score = 0.5
 
-        if segment.sharpness > 0.5:
+        sharpness = float(segment.sharpness or 0)
+        stability = float(segment.stability_score or 0.5)
+        brightness = float(segment.brightness or 0.5)
+        motion_val = segment.motion_intensity.value if isinstance(segment.motion_intensity, MotionIntensity) else int(segment.motion_intensity or 0)
+
+        if sharpness > 0.5:
             score += 0.15
-        elif segment.sharpness < 0.1:
+        elif sharpness < 0.1:
             score -= 0.2
 
-        if segment.stability_score > 0.7:
+        if stability > 0.7:
             score += 0.1
-        elif segment.stability_score < 0.3:
+        elif stability < 0.3:
             score -= 0.15
 
-        if 0.3 <= segment.brightness <= 0.8:
+        if 0.3 <= brightness <= 0.8:
             score += 0.1
-        elif segment.brightness < 0.1 or segment.brightness > 0.95:
+        elif brightness < 0.1 or brightness > 0.95:
             score -= 0.2
 
-        if segment.motion_intensity in (MotionIntensity.MEDIUM, MotionIntensity.HIGH):
+        if motion_val in (MotionIntensity.MEDIUM.value, MotionIntensity.HIGH.value):
             score += 0.1
 
         if segment.has_speech or segment.has_music:
